@@ -1,0 +1,16 @@
+[project]
+name = "rag-01"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "chromadb>=1.5.2",
+    "faiss-cpu>=1.13.2",
+    "langchain>=1.2.10",
+    "langchain-community>=0.4.1",
+    "ollama>=0.6.1",
+    "pymupdf>=1.27.1",
+    "sentence-transformers>=5.2.3",
+    "streamlit>=1.55.0",
+]
