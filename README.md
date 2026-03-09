@@ -1,58 +1,55 @@
-# 📄 Chat with Your Documents — Modular RAG Application
+# 📄 RAG Document Chat Application
 
-A **Retrieval-Augmented Generation (RAG)** application that allows users to upload PDF documents and ask questions about them. The system retrieves relevant information from the document using embeddings and a vector database, then generates answers using a local LLM.
-
-This project demonstrates a **production-style modular RAG architecture** including document ingestion, semantic retrieval, reranking, and a chat interface.
+A **Retrieval-Augmented Generation (RAG)** application that allows users to **upload PDF documents and ask questions about them**.
+The system retrieves relevant information from the document using embeddings and a vector database, then generates answers using **Gemini API with an Ollama fallback**.
 
 ---
 
 # 🚀 Features
 
-* Upload PDF documents
+* Upload PDF documents through a web interface
 * Automatic document ingestion
 * Semantic search using embeddings
-* Vector database storage
-* Cross-encoder reranking
-* Local LLM generation
-* Chat interface for querying documents
-* Modular architecture for easy extension
+* Hybrid retrieval (**Vector Search + BM25**)
+* Reranking for better relevance
+* Context compression for efficient prompts
+* LLM routing (**Gemini API → Ollama fallback**)
+* Interactive chat interface
 
 ---
 
-# 🧠 Architecture
-
-The system follows a typical **RAG pipeline**:
+# 🧠 System Architecture
 
 ```
-User Query
-    ↓
-Query Embedding
-    ↓
-Vector Database Search
-    ↓
-Top-K Document Retrieval
-    ↓
-Reranking
-    ↓
-Context Construction
-    ↓
-LLM Generation
-    ↓
-Answer
-```
-
-Document ingestion pipeline:
-
-```
-PDF Upload
-    ↓
-Document Loader
-    ↓
+User
+ ↓
+Streamlit UI
+ ↓
+Upload PDF
+ ↓
+Data Ingestion Pipeline
+ ↓
 Chunking
-    ↓
-Embedding
-    ↓
-Vector Database Storage
+ ↓
+Embeddings (BGE Small)
+ ↓
+Vector Database (FAISS)
+ ↓
+Hybrid Retrieval (Vector + BM25)
+ ↓
+Reranker
+ ↓
+Context Compression
+ ↓
+Prompt Construction
+ ↓
+LLM Router
+      ↓
+   Gemini API
+      ↓ (fallback)
+   Ollama Local Model
+ ↓
+Answer
 ```
 
 ---
@@ -62,18 +59,17 @@ Vector Database Storage
 ```
 RAG_01
 │
-├── data
-│   └── uploads
-│
 ├── frontend
 │   └── streamlit_app.py
 │
 ├── rag
 │   ├── ingestion.py
+│   ├── pipeline.py
 │   ├── retriever.py
 │   ├── reranker.py
+│   ├── compressor.py
 │   ├── generator.py
-│   └── pipeline.py
+│   └── llm_router.py
 │
 ├── utils
 │   ├── document_loader.py
@@ -86,10 +82,11 @@ RAG_01
 ├── prompts
 │   └── system_prompt.py
 │
-├── test_ingestion.py
-├── test_query.py
+├── data
+│   └── uploads
 │
-└── requirements.txt
+├── requirements.txt
+└── README.md
 ```
 
 ---
@@ -100,28 +97,41 @@ RAG_01
 * Streamlit
 * FAISS Vector Database
 * Sentence Transformers
+* BM25 Retrieval
 * Cross Encoder Reranking
 * PyMuPDF
-* Ollama Local LLM
-* LangChain Components
+* Gemini API
+* Ollama
 
 ---
 
-# 🧩 Components Explanation
+# 🧩 Pipeline Explanation
 
-## Document Loader
+## 1️⃣ Document Upload
 
-Extracts text from PDF files using PyMuPDF and converts them into structured documents.
+Users upload a PDF through the Streamlit interface.
+
+The file is stored in:
 
 ```
-PDF → Extract text → Document objects
+data/uploads
 ```
 
 ---
 
-## Chunking
+## 2️⃣ Document Loading
 
-Large documents are split into smaller overlapping chunks to improve retrieval.
+The PDF is processed using **PyMuPDF** and converted into text documents.
+
+```
+PDF → Text → Document objects
+```
+
+---
+
+## 3️⃣ Chunking
+
+Large documents are split into smaller chunks.
 
 Typical configuration:
 
@@ -130,96 +140,119 @@ chunk_size = 500
 chunk_overlap = 100
 ```
 
-This ensures the retriever captures meaningful context.
+This improves retrieval accuracy.
 
 ---
 
-## Embedding Model
+## 4️⃣ Embedding Generation
 
-The system uses the **BGE embedding model**:
+The system converts chunks into vector embeddings using:
 
 ```
 BAAI/bge-small-en
 ```
 
-This model converts text into vector embeddings for semantic search.
+Embeddings represent the **semantic meaning of text**.
 
 ---
 
-## Vector Database
+## 5️⃣ Vector Storage
 
-The project uses **FAISS** to store embeddings and perform fast similarity search.
+Embeddings are stored in **FAISS**.
 
-FAISS allows efficient retrieval of semantically similar document chunks.
+FAISS enables fast similarity search.
 
----
-
-## Retriever
-
-The retriever performs semantic search on the vector database.
-
-Steps:
+Stored files:
 
 ```
-Query → Embedding → Similarity Search → Top-K Documents
-```
-
-To improve retrieval quality, a query instruction is used:
-
-```
-Represent this sentence for searching relevant passages: {query}
+vectorstore/faiss_index
+    ├── index.faiss
+    └── index.pkl
 ```
 
 ---
 
-## Reranker
+## 6️⃣ Hybrid Retrieval
 
-The retriever may return multiple documents. A **cross-encoder reranker** improves accuracy by scoring relevance between the query and documents.
+To improve retrieval accuracy, the system uses:
 
-Model used:
+```
+Vector Search (semantic similarity)
++
+BM25 (keyword search)
+```
+
+This ensures both **semantic meaning and exact keywords** are captured.
+
+---
+
+## 7️⃣ Reranking
+
+Retrieved chunks are reranked using a **cross encoder model**:
 
 ```
 cross-encoder/ms-marco-MiniLM-L-6-v2
 ```
 
----
-
-## Prompt Construction
-
-Retrieved document chunks are merged into a prompt with a system instruction:
-
-```
-Context + User Question → LLM
-```
-
-The LLM is instructed to answer **only using the provided context**.
+This improves relevance before sending context to the LLM.
 
 ---
 
-## LLM Generation
+## 8️⃣ Context Compression
 
-The project uses a **local language model via Ollama**.
+Context compression removes irrelevant chunks.
 
-Example models:
+Instead of sending all retrieved chunks to the LLM:
 
-* llama3
-* phi3
-* mistral
+```
+Retriever → 10 chunks
+```
 
-The LLM generates answers using retrieved document context.
+The compressor filters them:
+
+```
+Compressor → 3–4 relevant chunks
+```
+
+Benefits:
+
+* faster responses
+* smaller prompts
+* better accuracy
+
+---
+
+## 9️⃣ LLM Router
+
+The system uses a **model routing strategy**.
+
+```
+Gemini API
+↓
+If API fails
+↓
+Ollama Local Model
+```
+
+Advantages:
+
+* fast cloud inference
+* offline capability
+* improved reliability
 
 ---
 
 # 🖥️ Frontend
 
-The frontend is built using **Streamlit**.
+The UI is built using **Streamlit**.
 
 Features:
 
-* Upload PDF documents
-* Process documents
-* Chat interface for asking questions
-* Conversation history
+* upload PDF
+* process document
+* ask questions
+* chat interface
+* conversation history
 
 ---
 
@@ -228,11 +261,11 @@ Features:
 Clone the repository:
 
 ```
-git clone <repository-url>
+git clone <repo-url>
 cd RAG_01
 ```
 
-Create a virtual environment:
+Create virtual environment:
 
 ```
 python -m venv rag-env
@@ -254,101 +287,58 @@ pip install -r requirements.txt
 
 ---
 
-# 🤖 Install Local LLM
+# 🔑 Gemini API Setup
 
-Install Ollama:
-
-https://ollama.com/download
-
-Download a model:
+Create an API key from:
 
 ```
-ollama pull phi3
+https://aistudio.google.com/app/apikey
 ```
 
-Start the Ollama server:
+Set environment variable.
+
+Windows CMD:
 
 ```
-ollama serve
+setx GEMINI_API_KEY "your_api_key"
 ```
+
+Restart the terminal afterward.
 
 ---
 
-# 📄 Document Ingestion
+# ▶️ Run the Application
 
-Place a PDF inside:
-
-```
-data/uploads/
-```
-
-Run ingestion:
-
-```
-python test_ingestion.py
-```
-
-This will:
-
-* load the document
-* split into chunks
-* generate embeddings
-* store them in FAISS
-
----
-
-# ❓ Query the System
-
-Run:
-
-```
-python test_query.py
-```
-
-Example:
-
-```
-Ask question: What is object detection?
-```
-
----
-
-# 💬 Run the Web Interface
-
-Start the Streamlit application:
+Start the Streamlit app:
 
 ```
 streamlit run frontend/streamlit_app.py
 ```
 
-Open the browser:
+Open:
 
 ```
 http://localhost:8501
 ```
 
-Upload a document and start chatting.
+Workflow:
 
----
+1. Upload PDF
+2. Click **Process Document**
+3. Ask questions
+
 
 # ⚡ Performance Optimizations
 
-To improve response time:
+Implemented optimizations:
 
-1. Cache the RAG pipeline using Streamlit caching
-2. Reduce retrieved chunks
-3. Use smaller LLM models like `phi3`
-4. Limit context sent to LLM
-5. Disable reranking if speed is critical
+* hybrid retrieval
+* reranking
+* context compression
+* smaller embedding model
+* prompt optimization
 
-
-# 🎯 Use Cases
-
-* Research paper QA
-* Legal document analysis
-* Company knowledge base
-* Study assistant
-* Internal document search
+These improvements significantly improve RAG accuracy.
 
 
 
