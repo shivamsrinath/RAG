@@ -1,4 +1,4 @@
-import ollama
+from rag.llm_router import LLMRouter
 from prompts.system_prompt import SYSTEM_PROMPT
 
 
@@ -6,7 +6,7 @@ class Generator:
 
     def __init__(self):
 
-        self.model = "phi3"
+        self.router = LLMRouter()
 
     def generate(self, query, documents):
 
@@ -19,9 +19,6 @@ class Generator:
             question=query
         )
 
-        response = ollama.chat(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        response = self.router.generate(prompt)
 
-        return response["message"]["content"]
+        return response

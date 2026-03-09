@@ -1,10 +1,10 @@
 import sys
 import os
+import streamlit as st
 
-# Fix Python import path
+# fix imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import streamlit as st
 from rag.ingestion import DataIngestion
 from rag.pipeline import RAGPipeline
 
@@ -14,32 +14,17 @@ st.set_page_config(page_title="RAG Chat", layout="wide")
 st.title("📄 Chat with your Documents")
 
 
-# -------------------------
-# CACHE THE RAG PIPELINE
-# -------------------------
-
-@st.cache_resource
-def load_rag_pipeline():
-
-    print("Loading RAG Pipeline...")
-
-    return RAGPipeline()
-
-
-rag = load_rag_pipeline()
-
-
-# -------------------------
-# SESSION MEMORY
-# -------------------------
+# session state variables
+if "rag" not in st.session_state:
+    st.session_state.rag = None
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
-# -------------------------
-# FILE UPLOAD
-# -------------------------
+# ---------------------------
+# Upload Document
+# ---------------------------
 
 st.sidebar.header("Upload Document")
 
@@ -52,7 +37,7 @@ if uploaded_file:
     with open(save_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    st.sidebar.success("PDF uploaded successfully!")
+    st.sidebar.success("PDF uploaded successfully")
 
     if st.sidebar.button("Process Document"):
 
@@ -61,47 +46,48 @@ if uploaded_file:
             ingestion = DataIngestion(save_path)
             ingestion.run_pipeline()
 
-        st.sidebar.success("Document processed!")
+            # load pipeline AFTER ingestion
+            st.session_state.rag = RAGPipeline()
+
+        st.sidebar.success("Document processed successfully!")
 
 
-# -------------------------
-# DISPLAY CHAT HISTORY
-# -------------------------
+# ---------------------------
+# Chat UI
+# ---------------------------
 
-for message in st.session_state.messages:
+for msg in st.session_state.messages:
 
-    with st.chat_message(message["role"]):
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
 
-        st.write(message["content"])
 
-
-# -------------------------
-# USER INPUT
-# -------------------------
-
-query = st.chat_input("Ask something about the document...")
+query = st.chat_input("Ask a question about the document")
 
 
 if query:
 
-    # Save user message
-    st.session_state.messages.append(
-        {"role": "user", "content": query}
-    )
+    if st.session_state.rag is None:
 
-    with st.chat_message("user"):
-        st.write(query)
+        st.warning("Please upload and process a document first.")
 
-    # Generate answer
-    with st.chat_message("assistant"):
+    else:
 
-        with st.spinner("Thinking..."):
+        st.session_state.messages.append(
+            {"role": "user", "content": query}
+        )
 
-            response = rag.run(query)
+        with st.chat_message("user"):
+            st.write(query)
 
-            st.write(response)
+        with st.chat_message("assistant"):
 
-    # Save assistant response
-    st.session_state.messages.append(
-        {"role": "assistant", "content": response}
-    )
+            with st.spinner("Thinking..."):
+
+                response = st.session_state.rag.run(query)
+
+                st.write(response)
+
+        st.session_state.messages.append(
+            {"role": "assistant", "content": response}
+        )

@@ -1,6 +1,7 @@
 from rag.retriever import Retriever
 from rag.reranker import Reranker
 from rag.generator import Generator
+from rag.compressor import ContextCompressor
 
 
 class RAGPipeline:
@@ -9,18 +10,26 @@ class RAGPipeline:
 
         self.retriever = Retriever()
         self.reranker = Reranker()
+        self.compressor = ContextCompressor()
         self.generator = Generator()
 
     def run(self, query):
 
         docs = self.retriever.retrieve(query)
 
-        if len(docs) == 0:
-            return "No relevant information found in the documents."
+        print("Retrieved docs:", len(docs))
 
         ranked_docs = self.reranker.rerank(query, docs)
 
-        top_docs = ranked_docs[:2]
+        # compress context
+        compressed_docs = self.compressor.compress(query, ranked_docs)
+
+        print("Compressed docs:", len(compressed_docs))
+
+        if len(compressed_docs) == 0:
+            return "No relevant information found in the documents."
+
+        top_docs = compressed_docs[:3]
 
         answer = self.generator.generate(query, top_docs)
 
